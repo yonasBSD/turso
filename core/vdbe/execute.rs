@@ -8511,16 +8511,11 @@ pub fn op_function(
                                 }
 
                                 for column in &mut columns {
-                                    match column.expr.as_mut() {
-                                        ast::Expr::Id(id)
-                                            if normalize_ident(id.as_str()) == rename_from =>
-                                        {
-                                            *id = Name::exact(
-                                                column_def.col_name.as_str().to_owned(),
-                                            );
-                                        }
-                                        _ => {}
-                                    }
+                                    rename_identifiers(
+                                        column.expr.as_mut(),
+                                        &rename_from,
+                                        column_def.col_name.as_str(),
+                                    );
                                 }
 
                                 if let Some(ref mut wc) = where_clause {

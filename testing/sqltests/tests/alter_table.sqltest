@@ -633,6 +633,72 @@ expect {
     20|2
 }
 
+# Renaming a parent column referenced by a child table's FOREIGN KEY must
+# rewrite the child table's stored CREATE TABLE text.
+test alter-table-rename-column-updates-sibling-fk-table-level {
+    CREATE TABLE p (id INTEGER PRIMARY KEY, ref_col INTEGER UNIQUE);
+    CREATE TABLE c (x INTEGER, y INTEGER, FOREIGN KEY (y) REFERENCES p (ref_col));
+    ALTER TABLE p RENAME COLUMN ref_col TO renamed_ref;
+    SELECT count(*) FROM sqlite_schema WHERE name = 'c' AND sql LIKE '%REFERENCES%p%renamed_ref%';
+}
+expect {
+    1
+}
+
+@cross-check-integrity
+test alter-table-rename-column-updates-sibling-fk-inline {
+    CREATE TABLE p (id INTEGER PRIMARY KEY, ref_col INTEGER UNIQUE);
+    CREATE TABLE c (x INTEGER, y INTEGER REFERENCES p (ref_col));
+    ALTER TABLE p RENAME COLUMN ref_col TO renamed_ref;
+    SELECT count(*) FROM sqlite_schema WHERE name = 'c' AND sql LIKE '%REFERENCES%p%renamed_ref%';
+}
+expect {
+    1
+}
+
+# After renaming, FK enforcement must use the new column. An INSERT into the
+# child referencing a value present in the parent's renamed column must
+# succeed; an absent value must still fail.
+@cross-check-integrity
+test alter-table-rename-column-sibling-fk-still-enforced {
+    PRAGMA foreign_keys = ON;
+    CREATE TABLE p (id INTEGER PRIMARY KEY, ref_col INTEGER UNIQUE);
+    CREATE TABLE c (x INTEGER, y INTEGER REFERENCES p (ref_col));
+    INSERT INTO p VALUES (1, 100);
+    ALTER TABLE p RENAME COLUMN ref_col TO renamed_ref;
+    INSERT INTO c VALUES (1, 100);
+    SELECT * FROM c;
+}
+expect {
+    1|100
+}
+
+@cross-check-integrity
+test alter-table-rename-column-sibling-fk-violation-after-rename {
+    PRAGMA foreign_keys = ON;
+    CREATE TABLE p (id INTEGER PRIMARY KEY, ref_col INTEGER UNIQUE);
+    CREATE TABLE c (x INTEGER, y INTEGER REFERENCES p (ref_col));
+    INSERT INTO p VALUES (1, 100);
+    ALTER TABLE p RENAME COLUMN ref_col TO renamed_ref;
+    INSERT INTO c VALUES (1, 999);
+}
+expect error {
+}
+
+# RENAME a referenced parent column then trigger the child table's CREATE TABLE
+# text to be re-emitted via an unrelated DROP COLUMN on the child.
+@cross-check-integrity
+test alter-table-rename-parent-col-then-drop-on-child-keeps-renamed-fk {
+    CREATE TABLE p (id INTEGER PRIMARY KEY, ref_col INTEGER UNIQUE);
+    CREATE TABLE c (x INTEGER, y INTEGER, z INTEGER, FOREIGN KEY (y) REFERENCES p (ref_col));
+    ALTER TABLE p RENAME COLUMN ref_col TO renamed_ref;
+    ALTER TABLE c DROP COLUMN z;
+    SELECT count(*) FROM sqlite_schema WHERE name = 'c' AND sql LIKE '%REFERENCES%p%renamed_ref%';
+}
+expect {
+    1
+}
+
 @cross-check-integrity
 test drop-column-removes-check-constraint {
     CREATE TABLE t_check (a INTEGER PRIMARY KEY, b REAL CHECK (b BETWEEN 0.0 AND 1000.0), c INTEGER NOT NULL);
