@@ -96,7 +96,7 @@ class Database {
    *
    * @param {string} sql - The SQL statement string to prepare.
    */
-  prepare(sql) {
+  prepare(sql: string): Promise<Statement> {
     // Only throw if we connected before but now the database is closed
     // Allow implicit connection if not connected yet
     if (this.connected && !this.open) {
@@ -108,9 +108,9 @@ class Database {
 
     try {
       if (this.connected) {
-        return new Statement(maybeValue(this.db.prepare(sql)), this.db, this.execLock, this.ioStep);
+        return new Statement(maybeValue(this.db.prepare(sql)), this.db, this.execLock, this.ioStep) as unknown as Promise<Statement>;
       } else {
-        return new Statement(maybePromise(() => this.connect().then(() => this.db.prepare(sql))), this.db, this.execLock, this.ioStep)
+        return new Statement(maybePromise(() => this.connect().then(() => this.db.prepare(sql))), this.db, this.execLock, this.ioStep) as unknown as Promise<Statement>;
       }
     } catch (err) {
       throw convertError(err);
@@ -164,7 +164,7 @@ class Database {
    * @param {...any} bindParameters - Bind parameters, optionally followed by a query options object.
    */
   async run(sql, ...bindParameters) {
-    const stmt = this.prepare(sql);
+    const stmt = await this.prepare(sql);
     try {
       return await stmt.run(...bindParameters);
     } finally {
@@ -179,7 +179,7 @@ class Database {
    * @param {...any} bindParameters - Bind parameters, optionally followed by a query options object.
    */
   async get(sql, ...bindParameters) {
-    const stmt = this.prepare(sql);
+    const stmt = await this.prepare(sql);
     try {
       return await stmt.get(...bindParameters);
     } finally {
@@ -194,7 +194,7 @@ class Database {
    * @param {...any} bindParameters - Bind parameters, optionally followed by a query options object.
    */
   async all(sql, ...bindParameters) {
-    const stmt = this.prepare(sql);
+    const stmt = await this.prepare(sql);
     try {
       return await stmt.all(...bindParameters);
     } finally {
@@ -209,7 +209,7 @@ class Database {
    * @param {...any} bindParameters - Bind parameters, optionally followed by a query options object.
    */
   async *iterate(sql, ...bindParameters) {
-    const stmt = this.prepare(sql);
+    const stmt = await this.prepare(sql);
     try {
       yield* stmt.iterate(...bindParameters);
     } finally {
@@ -228,7 +228,7 @@ class Database {
 
     const pragma = `PRAGMA ${source}`;
 
-    const stmt = this.prepare(pragma);
+    const stmt = await this.prepare(pragma);
     try {
       const results = await stmt.all();
       return results;
